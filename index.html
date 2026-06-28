@@ -440,7 +440,7 @@ body{
           <div class="add-key-box">
             <div style="font-size:13px;color:var(--muted);font-weight:500">新增 Gemini API 金鑰</div>
             <input class="key-name-input" id="new-key-name" placeholder="名稱（如：個人帳號）">
-            <input class="key-input" id="new-key-val" type="password" placeholder="AIza...">
+            <input class="key-input" id="new-key-val" type="password" placeholder="AIza... 或 AQ.A...">
             <button class="btn-add-key" onclick="addKey()">＋ 儲存金鑰</button>
           </div>
 
@@ -532,7 +532,6 @@ function addKey() {
   const name = document.getElementById('new-key-name').value.trim() || '未命名';
   const val  = document.getElementById('new-key-val').value.trim();
   if (!val) { showToast('請輸入 API 金鑰', 'error'); return; }
-  if (!val.startsWith('AIza')) { showToast('格式不正確，應以 AIza 開頭', 'error'); return; }
   if (apiKeys.find(k => k.value === val)) { showToast('此金鑰已存在', 'error'); return; }
   apiKeys.push({ id: Date.now(), name, value: val });
   saveKeys();
@@ -768,7 +767,7 @@ async function callGemini(messages, systemPrompt=''){
   let resp;
   try{ resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents})}); }
   catch(netErr){
-    throw new Error('網路錯誤：無法連線到 Gemini API。請確認網路連線正常。');
+    throw new Error(`[網路錯誤] ${netErr.message} ▸ 無法連線 generativelanguage.googleapis.com，請確認網路正常。`);
   }
   if(!resp.ok){
     let errMsg='';
@@ -777,17 +776,20 @@ async function callGemini(messages, systemPrompt=''){
       errMsg=errJson.error?.message||'';
     }catch(e){}
     // Translate common errors
-    if(resp.status===400) throw new Error(`請求格式錯誤 (400)：${errMsg||'圖片可能過大或格式不支援，請改用 JPG 格式後重試。'}`);
-    if(resp.status===401||resp.status===403) throw new Error(`API 金鑰無效或無權限 (${resp.status})：請至「設定」確認金鑰是否正確，或前往 aistudio.google.com 確認金鑰狀態。`);
-    if(resp.status===429) throw new Error('已超過 API 請求限制 (429)：請稍等幾秒後重試，或改用其他金鑰。');
-    if(resp.status===500) throw new Error('Gemini 伺服器錯誤 (500)：請稍後重試。');
-    throw new Error(`API 錯誤 ${resp.status}：${errMsg||'未知錯誤'}`);
+    const hint400 = '圖片可能過大或格式不支援，建議改用 JPG 後重試。';
+    const hint401 = '金鑰無效或已過期，請至設定確認或重新產生。';
+    const hint403 = '金鑰無權限或已被停用，請重新產生。';
+    const hint429 = '請求過於頻繁或已達免費配額上限，請稍後重試。';
+    const hint500 = 'Gemini 伺服器暫時異常，請稍後重試。';
+    const hints = {400:hint400,401:hint401,403:hint403,429:hint429,500:hint500};
+    const hint = hints[resp.status]||'';
+    throw new Error(`[HTTP ${resp.status}] ${errMsg||'未知錯誤'}${hint?' ▸ '+hint:''}`);
   }
   const data=await resp.json();
   // Check for content filter block
   const candidate=data.candidates?.[0];
-  if(!candidate) throw new Error('Gemini 未回傳結果，可能圖片內容被安全過濾器攔截，請嘗試其他圖片。');
-  if(candidate.finishReason==='SAFETY') throw new Error('圖片被 Gemini 安全過濾器攔截，請確認圖片內容合規後重試。');
+  if(!candidate) throw new Error(`[無回傳結果] candidates 為空。原始回應：${JSON.stringify(data).slice(0,200)}`);
+  if(candidate.finishReason==='SAFETY') throw new Error(`[SAFETY 過濾] 圖片被安全過濾器攔截 (finishReason: SAFETY)，請確認圖片內容合規。`);
   return candidate.content?.parts?.map(p=>p.text||'').join('')||'';
 }
 
