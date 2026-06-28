@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>名片 AI</title>
+<style>
+:root {
+  --bg: #0f0f11;
+  --surface: #1a1a1f;
+  --surface2: #222228;
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.15);
+  --text: #e8e6df;
+  --muted: #7c7a74;
+  --accent: #7c6cf8;
+  --accent2: #a599ff;
+  --green: #3ecf8e;
+  --amber: #f5a623;
+  --red: #e85d4a;
+  --r: 12px;
+  --rs: 8px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{
+  font-family:'Helvetica Neue','PingFang TC','Microsoft JhengHei',sans-serif;
+  background:var(--bg);color:var(--text);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── App Shell ── */
+.app{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* ── Top Nav ── */
+.topnav{
+  display:flex;align-items:center;gap:10px;
+  padding:calc(var(--safe-t) + 10px) 16px 10px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:-.3px;flex:1}
+.logo-icon{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.nav-badge{font-size:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--muted);font-weight:400}
+.btn-icon{
+  width:36px;height:36px;border-radius:var(--rs);background:var(--surface2);
+  border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;
+  font-size:18px;cursor:pointer;flex-shrink:0;transition:background .15s;
+}
+.btn-icon:active{background:var(--border2)}
+
+/* ── Bottom Tab Bar ── */
+.tabbar{
+  display:flex;background:var(--surface);border-top:1px solid var(--border);
+  padding-bottom:var(--safe-b);flex-shrink:0;
+}
+.tabbar-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px 4px 6px;cursor:pointer;gap:3px;transition:color .15s;
+  color:var(--muted);font-size:10px;font-weight:500;letter-spacing:.3px;
+  border:none;background:transparent;
+}
+.tabbar-item.active{color:var(--accent2)}
+.tabbar-icon{font-size:22px;line-height:1}
+.tabbar-item.active .tabbar-icon{filter:drop-shadow(0 0 6px var(--accent))}
+
+/* ── Panels ── */
+.panels{flex:1;overflow:hidden;position:relative}
+.panel{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .15s}
+.panel.active{opacity:1;pointer-events:auto}
+
+/* ══ SCAN PANEL ══ */
+.scan-panel{overflow-y:auto}
+
+/* Upload zone */
+.upload-wrap{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 20px;min-height:100%;
+}
+.drop-zone{
+  width:100%;max-width:380px;
+  border:2px dashed var(--border2);border-radius:20px;
+  padding:48px 24px;text-align:center;cursor:pointer;position:relative;
+  transition:border-color .2s,background .2s;
+}
+.drop-zone:active,.drop-zone.dragover{border-color:var(--accent);background:rgba(124,108,248,.06)}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:52px;margin-bottom:14px}
+.drop-title{font-size:18px;font-weight:600;margin-bottom:6px}
+.drop-sub{font-size:13px;color:var(--muted);line-height:1.5}
+.fmt-row{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.badge{font-size:11px;padding:3px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+
+/* Scan result */
+.scan-result{display:none;flex-direction:column;padding:16px;gap:14px;flex:1}
+.scan-result.show{display:flex}
+
+.card-preview-wrap{position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:var(--surface2);max-height:200px;display:flex;align-items:center;justify-content:center}
+.card-preview-wrap img{width:100%;max-height:200px;object-fit:contain;display:block}
+.rotate-btns{position:absolute;bottom:8px;right:8px;display:flex;gap:4px}
+.rbtn{
+  background:rgba(15,15,17,.75);backdrop-filter:blur(8px);
+  border:1px solid var(--border2);border-radius:6px;
+  color:var(--text);font-size:13px;padding:5px 9px;cursor:pointer;
+  transition:background .15s;
+}
+.rbtn:active{background:rgba(124,108,248,.3)}
+
+.status-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+.sdot.loading{background:var(--amber);animation:pulse 1s infinite}
+.sdot.err{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fi{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px}
+.fi-full{grid-column:span 2}
+.fi label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px}
+.fi input{width:100%;background:transparent;border:none;color:var(--text);font-size:14px;font-family:inherit;outline:none;padding:0}
+.fi input:focus{color:var(--accent2)}
+
+.action-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  padding:11px 18px;border-radius:var(--rs);font-size:14px;font-weight:600;
+  cursor:pointer;border:none;display:flex;align-items:center;gap:6px;
+  transition:opacity .15s;white-space:nowrap;
+}
+.btn:active{opacity:.75}
+.btn-primary{background:var(--accent);color:#fff;flex:1;justify-content:center}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.btn-danger{background:rgba(232,93,74,.15);color:var(--red);border:1px solid rgba(232,93,74,.3)}
+
+.rotate-hint{font-size:11px;color:var(--muted);padding:2px 0}
+
+/* Error detail box */
+.err-box{
+  background:rgba(232,93,74,.08);border:1px solid rgba(232,93,74,.25);
+  border-radius:var(--rs);padding:12px 14px;font-size:12px;color:var(--red);
+  display:none;line-height:1.6;
+}
+.err-box.show{display:block}
+.err-box strong{display:block;margin-bottom:4px;font-size:13px}
+
+/* ══ CONTACTS PANEL ══ */
+.contacts-panel{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.contacts-header{padding:14px 16px 8px;display:flex;align-items:center;gap:8px}
+.contacts-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex:1}
+.contact-count-badge{font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:2px 8px;color:var(--muted)}
+
+.contact-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background .1s;
+}
+.contact-item:active{background:var(--surface2)}
+.avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0}
+.ci-info{flex:1;min-width:0}
+.ci-name{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.ci-date{font-size:11px;color:var(--muted);flex-shrink:0}
+.chevron{color:var(--border2);font-size:14px;flex-shrink:0}
+
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:48px 24px;gap:8px}
+.empty-icon{font-size:48px;opacity:.4}
+.empty-title{font-size:16px;font-weight:500}
+.empty-sub{font-size:13px}
+
+/* ══ DETAIL PANEL ══ */
+.detail-panel{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.detail-back{
+  display:flex;align-items:center;gap:6px;
+  padding:12px 16px;font-size:15px;color:var(--accent2);cursor:pointer;
+  border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;
+}
+.detail-content{padding:20px 16px;display:flex;flex-direction:column;gap:16px}
+.detail-hero{display:flex;align-items:center;gap:14px}
+.detail-avatar{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0}
+.detail-name{font-size:20px;font-weight:700;line-height:1.2}
+.detail-meta{font-size:13px;color:var(--muted);margin-top:3px}
+.detail-img{width:100%;border-radius:var(--r);border:1px solid var(--border)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.df{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.df-full{grid-column:span 2}
+.df-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.df-value{font-size:14px}
+.df-value a{color:var(--accent2);text-decoration:none}
+
+/* ══ CHAT PANEL ══ */
+.chat-panel{display:flex;flex-direction:column}
+.chat-msgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:90%}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.mavatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.mavatar.ai{background:var(--accent)}
+.mavatar.user{background:var(--surface2);border:1px solid var(--border2)}
+.mbubble{padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.55;max-width:100%}
+.msg.ai .mbubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg.user .mbubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.mbubble table{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}
+.mbubble th{background:var(--surface2);color:var(--muted);font-weight:500;text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase}
+.mbubble td{padding:5px 8px;border-top:1px solid var(--border)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);font-size:12px;cursor:pointer;color:var(--text);transition:border-color .15s}
+.chip:active{border-color:var(--accent);color:var(--accent2)}
+.chat-input-row{
+  padding:10px 12px calc(10px + var(--safe-b));
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;gap:8px;align-items:flex-end;flex-shrink:0;
+}
+.chat-input{
+  flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:20px;
+  padding:9px 14px;color:var(--text);font-size:15px;font-family:inherit;
+  outline:none;resize:none;min-height:40px;max-height:100px;line-height:1.4;
+}
+.chat-input:focus{border-color:var(--accent)}
+.chat-input::placeholder{color:var(--muted)}
+.btn-send{
+  width:38px;height:38px;border-radius:50%;background:var(--accent);border:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.btn-send:active{opacity:.75}
+.btn-send svg{width:16px;height:16px;fill:#fff}
+
+/* ══ SETTINGS PANEL ══ */
+.settings-panel{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.settings-section{padding:20px 16px 0}
+.settings-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.key-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
+.key-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.key-row:last-child{border-bottom:none}
+.key-name{flex:1;font-size:14px;font-weight:500}
+.key-val{font-size:12px;color:var(--muted);font-family:'SF Mono','Fira Code',monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.key-actions{display:flex;gap:6px}
+.kbtn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text);transition:opacity .15s}
+.kbtn:active{opacity:.7}
+.kbtn.danger{color:var(--red);border-color:rgba(232,93,74,.3);background:rgba(232,93,74,.08)}
+
+.add-key-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+.key-input{
+  width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);
+  padding:10px 12px;color:var(--text);font-size:13px;font-family:'SF Mono','Fira Code',monospace;
+  outline:none;
+}
+.key-input:focus{border-color:var(--accent)}
+.key-input::placeholder{color:var(--muted)}
+.key-name-input{
+  width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);
+  padding:10px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;
+}
+.key-name-input::placeholder{color:var(--muted)}
+.key-name-input:focus{border-color:var(--accent)}
+.btn-add-key{background:var(--accent);color:#fff;border:none;border-radius:var(--rs);padding:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;transition:opacity .15s}
+.btn-add-key:active{opacity:.75}
+
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin:0 16px 16px}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--muted)}
+.info-val{font-weight:500}
+
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
+.modal-bg.show{display:flex}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;width:100%;padding:20px 20px calc(20px + var(--safe-b));max-height:80dvh;overflow-y:auto}
+.modal-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:16px}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:calc(80px + var(--safe-b));left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--surface);border:1px solid var(--border2);border-radius:100px;
+  padding:10px 18px;font-size:13px;font-weight:500;white-space:nowrap;
+  opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:300;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+
+/* ── Loading ── */
+.loading-overlay{position:fixed;inset:0;background:rgba(15,15,17,.85);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+.loading-overlay.show{display:flex}
+.loading-box{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:28px 36px;text-align:center;min-width:200px}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--muted)}
+
+/* ── Misc ── */
+.divider{height:1px;background:var(--border);margin:0 16px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top Nav -->
+  <div class="topnav">
+    <div class="logo">
+      <div class="logo-icon">📇</div>
+      名片 AI
+      <span class="nav-badge">Gemini</span>
+    </div>
+    <button class="btn-icon" onclick="triggerUpload()" title="掃描名片">📷</button>
+  </div>
+
+  <!-- Panels -->
+  <div class="panels">
+
+    <!-- ① Scan Panel -->
+    <div class="panel active" id="panel-scan">
+      <div class="scan-panel" style="flex:1;overflow-y:auto">
+
+        <!-- Upload area -->
+        <div class="upload-wrap" id="upload-wrap">
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" accept="image/*">
+            <div class="drop-icon">📷</div>
+            <div class="drop-title">拍照或上傳名片</div>
+            <div class="drop-sub">支援 JPG、PNG、WEBP<br>或直接從相簿選取</div>
+            <div class="fmt-row">
+              <span class="badge">JPG</span><span class="badge">PNG</span>
+              <span class="badge">WEBP</span><span class="badge">HEIC</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scan result -->
+        <div class="scan-result" id="scan-result">
+
+          <!-- Image preview + rotate overlay -->
+          <div class="card-preview-wrap">
+            <img id="preview-img" src="" alt="名片預覽">
+            <div class="rotate-btns">
+              <button class="rbtn" onclick="rotateImage(-90)" title="向左旋轉">↺</button>
+              <button class="rbtn" onclick="rotateImage(90)"  title="向右旋轉">↻</button>
+              <button class="rbtn" onclick="rotateImage(180)" title="旋轉180°">↕</button>
+            </div>
+          </div>
+
+          <!-- Status + error -->
+          <div class="status-row">
+            <span class="sdot" id="sdot"></span>
+            <span id="stext">辨識中...</span>
+          </div>
+          <div class="err-box" id="err-box">
+            <strong>⚠ 辨識失敗原因</strong>
+            <span id="err-detail"></span>
+          </div>
+          <div class="rotate-hint" id="rotate-hint" style="display:none">✓ 已旋轉 — 按「重新辨識」讓 AI 再試</div>
+
+          <!-- Fields -->
+          <div class="field-grid">
+            <div class="fi"><label>姓名</label><input id="f-name" placeholder="—"></div>
+            <div class="fi"><label>職稱</label><input id="f-title" placeholder="—"></div>
+            <div class="fi fi-full"><label>公司</label><input id="f-company" placeholder="—"></div>
+            <div class="fi"><label>電話</label><input id="f-phone" placeholder="—" type="tel"></div>
+            <div class="fi"><label>手機</label><input id="f-mobile" placeholder="—" type="tel"></div>
+            <div class="fi fi-full"><label>Email</label><input id="f-email" placeholder="—" type="email"></div>
+            <div class="fi fi-full"><label>地址</label><input id="f-address" placeholder="—"></div>
+            <div class="fi"><label>網站</label><input id="f-website" placeholder="—"></div>
+            <div class="fi"><label>備註</label><input id="f-note" placeholder="加入備忘..."></div>
+          </div>
+
+          <!-- Actions -->
+          <div class="action-row">
+            <button class="btn btn-primary" onclick="saveContact()">✓ 儲存聯絡人</button>
+            <button class="btn btn-secondary" onclick="reRecognize()">↺ 重新辨識</button>
+          </div>
+          <div class="action-row">
+            <button class="btn btn-secondary" onclick="resetScan()" style="flex:1;justify-content:center">重新掃描</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② Contacts Panel -->
+    <div class="panel" id="panel-contacts">
+      <div class="contacts-panel" style="flex:1;overflow-y:auto">
+        <div class="contacts-header">
+          <span class="contacts-title">所有聯絡人</span>
+          <span class="contact-count-badge" id="contact-count-badge">0</span>
+        </div>
+        <div id="contacts-list"></div>
+      </div>
+    </div>
+
+    <!-- ③ Detail Panel (pushed in) -->
+    <div class="panel" id="panel-detail">
+      <div class="detail-panel" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+        <div class="detail-back" onclick="switchTab('contacts')">
+          ‹ 聯絡人
+        </div>
+        <div class="detail-content" id="detail-content"></div>
+      </div>
+    </div>
+
+    <!-- ④ Chat Panel -->
+    <div class="panel" id="panel-chat">
+      <div class="chat-panel" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg ai">
+            <div class="mavatar ai">AI</div>
+            <div class="mbubble">
+              您好！可以問我關於您的聯絡人資訊。
+              <div class="chips">
+                <div class="chip" onclick="sendChip(this.textContent)">最近一個月新增的聯絡人</div>
+                <div class="chip" onclick="sendChip(this.textContent)">列出所有公司</div>
+                <div class="chip" onclick="sendChip(this.textContent)">共有幾位聯絡人？</div>
+                <div class="chip" onclick="sendChip(this.textContent)">找科技業聯絡人</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chat-input" placeholder="詢問聯絡人資訊..." rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"
+            oninput="autoResize(this)"></textarea>
+          <button class="btn-send" onclick="sendMsg()">
+            <svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ Settings Panel -->
+    <div class="panel" id="panel-settings">
+      <div class="settings-panel" style="flex:1;overflow-y:auto">
+        <div class="settings-section">
+          <div class="settings-label">API 金鑰</div>
+
+          <!-- Saved keys list -->
+          <div class="key-card" id="key-list-card">
+            <div id="key-list-items"></div>
+          </div>
+
+          <!-- Add key form -->
+          <div class="add-key-box">
+            <div style="font-size:13px;color:var(--muted);font-weight:500">新增 Gemini API 金鑰</div>
+            <input class="key-name-input" id="new-key-name" placeholder="名稱（如：個人帳號）">
+            <input class="key-input" id="new-key-val" type="password" placeholder="AIza...">
+            <button class="btn-add-key" onclick="addKey()">＋ 儲存金鑰</button>
+          </div>
+
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6;padding:0 2px">
+            前往 <strong style="color:var(--accent2)">aistudio.google.com</strong> 免費取得 API 金鑰。<br>
+            金鑰儲存於本裝置，不會上傳。
+          </div>
+        </div>
+
+        <div class="settings-section" style="padding-bottom:16px">
+          <div class="settings-label">使用狀況</div>
+        </div>
+        <div class="info-card">
+          <div class="info-row"><span class="info-key">聯絡人數量</span><span class="info-val" id="info-count">0</span></div>
+          <div class="info-row"><span class="info-key">使用中金鑰</span><span class="info-val" id="info-active-key">—</span></div>
+          <div class="info-row"><span class="info-key">AI 模型</span><span class="info-val">Gemini 2.0 Flash</span></div>
+          <div class="info-row"><span class="info-key">資料儲存</span><span class="info-val">本機 localStorage</span></div>
+        </div>
+
+        <div style="padding:0 16px 32px">
+          <button class="btn btn-danger" style="width:100%;justify-content:center" onclick="clearAllData()">
+            清除所有聯絡人資料
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panels -->
+
+  <!-- Bottom Tab Bar -->
+  <div class="tabbar">
+    <button class="tabbar-item active" id="tbi-scan" onclick="switchTab('scan')">
+      <span class="tabbar-icon">📷</span>掃描
+    </button>
+    <button class="tabbar-item" id="tbi-contacts" onclick="switchTab('contacts')">
+      <span class="tabbar-icon">👥</span>聯絡人
+    </button>
+    <button class="tabbar-item" id="tbi-chat" onclick="switchTab('chat')">
+      <span class="tabbar-icon">💬</span>詢問 AI
+    </button>
+    <button class="tabbar-item" id="tbi-settings" onclick="switchTab('settings')">
+      <span class="tabbar-icon">⚙️</span>設定
+    </button>
+  </div>
+
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">AI 辨識中...</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Hidden file input for top-nav button -->
+<input type="file" id="file-input-nav" accept="image/*" style="display:none">
+
+<script>
+// ══ STATE ════════════════════════════════════════════════════
+let contacts = JSON.parse(localStorage.getItem('bc_contacts') || '[]');
+let apiKeys  = JSON.parse(localStorage.getItem('bc_keys')     || '[]');
+// apiKeys: [{id, name, value}]
+
+let currentImageB64  = null;
+let currentImageType = 'image/jpeg';
+let currentRotation  = 0;
+const chatHistory    = [];
+
+const COLORS = ['#7c6cf8','#3ecf8e','#f5a623','#e85d4a','#4ab6e8','#c084fc','#fb7185','#34d399'];
+
+// ══ API KEY MANAGEMENT ══════════════════════════════════════
+function getActiveKey() {
+  // Use first key in list (user can reorder by deleting & re-adding)
+  return apiKeys[0]?.value || '';
+}
+function getActiveKeyName() {
+  return apiKeys[0]?.name || '—';
+}
+
+function saveKeys() {
+  localStorage.setItem('bc_keys', JSON.stringify(apiKeys));
+}
+
+function addKey() {
+  const name = document.getElementById('new-key-name').value.trim() || '未命名';
+  const val  = document.getElementById('new-key-val').value.trim();
+  if (!val) { showToast('請輸入 API 金鑰', 'error'); return; }
+  if (!val.startsWith('AIza')) { showToast('格式不正確，應以 AIza 開頭', 'error'); return; }
+  if (apiKeys.find(k => k.value === val)) { showToast('此金鑰已存在', 'error'); return; }
+  apiKeys.push({ id: Date.now(), name, value: val });
+  saveKeys();
+  document.getElementById('new-key-name').value = '';
+  document.getElementById('new-key-val').value  = '';
+  renderKeys();
+  showToast('金鑰已儲存');
+}
+
+function removeKey(id) {
+  if (!confirm('確定刪除此金鑰？')) return;
+  apiKeys = apiKeys.filter(k => k.id !== id);
+  saveKeys();
+  renderKeys();
+  showToast('金鑰已刪除');
+}
+
+function activateKey(id) {
+  const idx = apiKeys.findIndex(k => k.id === id);
+  if (idx <= 0) return;
+  const [k] = apiKeys.splice(idx, 1);
+  apiKeys.unshift(k);
+  saveKeys();
+  renderKeys();
+  showToast(`已切換至：${k.name}`);
+}
+
+function maskKey(v) {
+  if (!v || v.length < 8) return '****';
+  return v.slice(0, 6) + '••••' + v.slice(-3);
+}
+
+function renderKeys() {
+  const el = document.getElementById('key-list-items');
+  const info = document.getElementById('info-active-key');
+  info.textContent = getActiveKeyName();
+  if (!apiKeys.length) {
+    el.innerHTML = '<div style="padding:14px;font-size:13px;color:var(--muted);text-align:center">尚未設定金鑰</div>';
+    return;
+  }
+  el.innerHTML = apiKeys.map((k, i) => `
+    <div class="key-row">
+      <div>
+        <div class="key-name">${esc(k.name)}${i===0?' <span style="font-size:10px;color:var(--green);background:rgba(62,207,142,.12);border:1px solid rgba(62,207,142,.25);border-radius:4px;padding:1px 5px;">使用中</span>':''}</div>
+        <div class="key-val">${maskKey(k.value)}</div>
+      </div>
+      <div class="key-actions">
+        ${i!==0?`<button class="kbtn" onclick="activateKey(${k.id})">啟用</button>`:''}
+        <button class="kbtn danger" onclick="removeKey(${k.id})">刪除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══ TAB SWITCHING ════════════════════════════════════════════
+const TABS = ['scan','contacts','detail','chat','settings'];
+function switchTab(name) {
+  TABS.forEach(t => {
+    document.getElementById('panel-'+t).className = 'panel' + (t===name?' active':'');
+    const tbi = document.getElementById('tbi-'+t);
+    if (tbi) tbi.className = 'tabbar-item' + (t===name?' active':'');
+  });
+  if (name === 'contacts') renderContacts();
+  if (name === 'settings') { renderKeys(); updateInfo(); }
+}
+
+function updateInfo() {
+  document.getElementById('info-count').textContent = contacts.length;
+  document.getElementById('info-active-key').textContent = getActiveKeyName();
+}
+
+// ══ HELPERS ══════════════════════════════════════════════════
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function timeAgo(ts){
+  const d=Math.floor((Date.now()-ts)/1000);
+  if(d<60)return'剛剛';if(d<3600)return Math.floor(d/60)+'分前';
+  if(d<86400)return Math.floor(d/3600)+'時前';return Math.floor(d/86400)+'天前';
+}
+function avatarColor(name){
+  let h=0;for(let c of(name||'?'))h=(h*31+c.charCodeAt(0))&0xffff;
+  return COLORS[h%COLORS.length];
+}
+function initials(name){
+  if(!name)return'?';const p=name.trim().split(/\s+/);
+  if(p.length>=2)return(p[0][0]+p[p.length-1][0]).toUpperCase();
+  return name.slice(0,2).toUpperCase();
+}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
+
+function showToast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=(type==='success'?'✓ ':type==='error'?'✕ ':'')+msg;
+  t.className='toast show '+(type||'');
+  clearTimeout(t._tid);t._tid=setTimeout(()=>t.className='toast',2600);
+}
+function showLoading(txt='AI 辨識中...'){
+  document.getElementById('loading-text').textContent=txt;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading(){document.getElementById('loading').classList.remove('show')}
+
+function triggerUpload(){document.getElementById('file-input').click()}
+
+// ══ FILE HANDLING ════════════════════════════════════════════
+document.getElementById('file-input').addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]) });
+document.getElementById('file-input-nav').addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]) });
+
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('dragover')});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('dragover');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0])});
+
+function handleFile(file){
+  if(!file)return;
+  currentRotation=0;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const dataUrl=e.target.result;
+    currentImageType=file.type||'image/jpeg';
+    correctOrientation(dataUrl, currentImageType, corrected=>{
+      currentImageB64=corrected.split(',')[1];
+      document.getElementById('preview-img').src=corrected;
+      document.getElementById('upload-wrap').style.display='none';
+      document.getElementById('scan-result').classList.add('show');
+      document.getElementById('rotate-hint').style.display='none';
+      clearErr();
+      switchTab('scan');
+      recognizeCard();
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══ ROTATION ══════════════════════════════════════════════════
+function rotateImage(deg){
+  const img=document.getElementById('preview-img');
+  if(!img.src||img.src===location.href)return;
+  currentRotation=(currentRotation+deg+360)%360;
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d');
+  const tmp=new Image();
+  tmp.onload=()=>{
+    const rad=deg*Math.PI/180;
+    const swap=Math.abs(deg)===90;
+    canvas.width=swap?tmp.height:tmp.width;
+    canvas.height=swap?tmp.width:tmp.height;
+    ctx.translate(canvas.width/2,canvas.height/2);
+    ctx.rotate(rad);
+    ctx.drawImage(tmp,-tmp.width/2,-tmp.height/2);
+    const url=canvas.toDataURL(currentImageType||'image/jpeg',.92);
+    img.src=url;
+    currentImageB64=url.split(',')[1];
+    document.getElementById('rotate-hint').style.display='block';
+    clearErr();
+  };
+  tmp.src=img.src;
+}
+
+// EXIF auto-correct
+function correctOrientation(dataUrl,mimeType,cb){
+  const img=new Image();
+  img.onload=()=>{
+    getExifOrientation(dataUrl,ori=>{
+      if(!ori||ori===1){cb(dataUrl);return}
+      const canvas=document.createElement('canvas');
+      const ctx=canvas.getContext('2d');
+      const w=img.width,h=img.height;
+      const swap=[5,6,7,8].includes(ori);
+      canvas.width=swap?h:w;canvas.height=swap?w:h;
+      ctx.save();
+      switch(ori){
+        case 2:ctx.transform(-1,0,0,1,w,0);break;case 3:ctx.transform(-1,0,0,-1,w,h);break;
+        case 4:ctx.transform(1,0,0,-1,0,h);break;case 5:ctx.transform(0,1,1,0,0,0);break;
+        case 6:ctx.transform(0,1,-1,0,h,0);break;case 7:ctx.transform(0,-1,-1,0,h,w);break;
+        case 8:ctx.transform(0,-1,1,0,0,w);break;
+      }
+      ctx.drawImage(img,0,0);ctx.restore();
+      cb(canvas.toDataURL(mimeType||'image/jpeg',.92));
+    });
+  };
+  img.src=dataUrl;
+}
+function getExifOrientation(dataUrl,cb){
+  try{
+    const bin=atob(dataUrl.split(',')[1]);
+    const bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    const view=new DataView(bytes.buffer);
+    if(view.getUint16(0)!==0xFFD8){cb(null);return}
+    let off=2;
+    while(off<view.byteLength){
+      if(view.getUint16(off)===0xFFE1){
+        const le=view.getUint16(off+10)===0x4949;
+        const ifd=off+10+view.getUint32(off+14,le);
+        const n=view.getUint16(ifd,le);
+        for(let i=0;i<n;i++){
+          if(view.getUint16(ifd+2+i*12,le)===0x0112){cb(view.getUint16(ifd+2+i*12+8,le));return}
+        }
+        cb(null);return;
+      }
+      off+=2+view.getUint16(off+2);
+    }
+    cb(null);
+  }catch(e){cb(null)}
+}
+
+// ══ GEMINI API ════════════════════════════════════════════════
+async function callGemini(messages, systemPrompt=''){
+  const key=getActiveKey();
+  if(!key){
+    showToast('請先在「設定」中新增 API 金鑰','error');
+    throw new Error('未設定 API 金鑰。請前往「設定」→「新增 Gemini API 金鑰」。');
+  }
+  const contents=[];
+  if(systemPrompt){
+    contents.push({role:'user',parts:[{text:'[系統設定] '+systemPrompt}]});
+    contents.push({role:'model',parts:[{text:'了解，我會依照設定回答。'}]});
+  }
+  for(const m of messages){
+    const role=m.role==='assistant'?'model':'user';
+    let parts;
+    if(typeof m.content==='string') parts=[{text:m.content}];
+    else if(Array.isArray(m.content)){
+      parts=m.content.map(p=>{
+        if(p.type==='text')return{text:p.text};
+        if(p.type==='image')return{inline_data:{mime_type:p.source.media_type,data:p.source.data}};
+        return{text:''};
+      });
+    }else parts=[{text:String(m.content)}];
+    contents.push({role,parts});
+  }
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+  let resp;
+  try{ resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents})}); }
+  catch(netErr){
+    throw new Error('網路錯誤：無法連線到 Gemini API。請確認網路連線正常。');
+  }
+  if(!resp.ok){
+    let errMsg='';
+    try{
+      const errJson=await resp.json();
+      errMsg=errJson.error?.message||'';
+    }catch(e){}
+    // Translate common errors
+    if(resp.status===400) throw new Error(`請求格式錯誤 (400)：${errMsg||'圖片可能過大或格式不支援，請改用 JPG 格式後重試。'}`);
+    if(resp.status===401||resp.status===403) throw new Error(`API 金鑰無效或無權限 (${resp.status})：請至「設定」確認金鑰是否正確，或前往 aistudio.google.com 確認金鑰狀態。`);
+    if(resp.status===429) throw new Error('已超過 API 請求限制 (429)：請稍等幾秒後重試，或改用其他金鑰。');
+    if(resp.status===500) throw new Error('Gemini 伺服器錯誤 (500)：請稍後重試。');
+    throw new Error(`API 錯誤 ${resp.status}：${errMsg||'未知錯誤'}`);
+  }
+  const data=await resp.json();
+  // Check for content filter block
+  const candidate=data.candidates?.[0];
+  if(!candidate) throw new Error('Gemini 未回傳結果，可能圖片內容被安全過濾器攔截，請嘗試其他圖片。');
+  if(candidate.finishReason==='SAFETY') throw new Error('圖片被 Gemini 安全過濾器攔截，請確認圖片內容合規後重試。');
+  return candidate.content?.parts?.map(p=>p.text||'').join('')||'';
+}
+
+// ══ ERROR DISPLAY ════════════════════════════════════════════
+function showErr(msg){
+  const el=document.getElementById('err-box');
+  document.getElementById('err-detail').textContent=msg;
+  el.classList.add('show');
+  const sdot=document.getElementById('sdot');
+  sdot.className='sdot err';
+  document.getElementById('stext').textContent='辨識失敗';
+}
+function clearErr(){
+  document.getElementById('err-box').classList.remove('show');
+}
+
+// ══ CARD RECOGNITION ════════════════════════════════════════
+async function recognizeCard(){
+  if(!currentImageB64)return;
+  showLoading('Gemini AI 辨識中...');
+  ['name','title','company','phone','mobile','email','address','website','note'].forEach(f=>{
+    document.getElementById('f-'+f).value='';
+  });
+  clearErr();
+  const sdot=document.getElementById('sdot');
+  sdot.className='sdot loading';
+  document.getElementById('stext').textContent='辨識中...';
+
+  try{
+    const result=await callGemini([{
+      role:'user',
+      content:[
+        {type:'image',source:{type:'base64',media_type:currentImageType,data:currentImageB64}},
+        {type:'text',text:`請仔細辨識這張名片，提取所有聯絡資訊，只回傳 JSON，不要其他文字：
+{"name":"姓名","title":"職稱","company":"公司","phone":"電話","mobile":"手機","email":"Email","address":"地址","website":"網站"}
+若無該欄位填 ""。支援中文、英文、日文名片。`}
+      ]
+    }]);
+    const clean=result.replace(/```json|```/g,'').trim();
+    let data;
+    try{ data=JSON.parse(clean); }
+    catch(parseErr){
+      throw new Error(`AI 回傳內容無法解析為 JSON。原始回覆：${result.slice(0,120)}...`);
+    }
+    ['name','title','company','phone','mobile','email','address','website'].forEach(f=>{
+      if(data[f]) document.getElementById('f-'+f).value=data[f];
+    });
+    sdot.className='sdot';
+    document.getElementById('stext').textContent='辨識完成，可手動修正';
+    showToast('名片辨識成功！');
+  }catch(e){
+    showErr(e.message);
+    showToast('辨識失敗','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+async function reRecognize(){ await recognizeCard(); }
+
+function resetScan(){
+  currentImageB64=null; currentRotation=0;
+  document.getElementById('scan-result').classList.remove('show');
+  document.getElementById('upload-wrap').style.display='';
+  document.getElementById('rotate-hint').style.display='none';
+  document.getElementById('file-input').value='';
+  clearErr();
+}
+
+// ══ SAVE CONTACT ═════════════════════════════════════════════
+function saveContact(){
+  const c={
+    name:    document.getElementById('f-name').value.trim(),
+    title:   document.getElementById('f-title').value.trim(),
+    company: document.getElementById('f-company').value.trim(),
+    phone:   document.getElementById('f-phone').value.trim(),
+    mobile:  document.getElementById('f-mobile').value.trim(),
+    email:   document.getElementById('f-email').value.trim(),
+    address: document.getElementById('f-address').value.trim(),
+    website: document.getElementById('f-website').value.trim(),
+    note:    document.getElementById('f-note').value.trim(),
+    image:   document.getElementById('preview-img').src,
+    created_at: Date.now()
+  };
+  if(!c.name&&!c.company){ showToast('請至少填入姓名或公司','error'); return; }
+  contacts.push(c);
+  saveContacts();
+  showToast(`已儲存：${c.name||c.company}`);
+  resetScan();
+}
+function saveContacts(){
+  try{ localStorage.setItem('bc_contacts',JSON.stringify(contacts)); }catch(e){}
+}
+function clearAllData(){
+  if(!confirm('確定清除所有聯絡人資料？此操作無法復原。'))return;
+  contacts=[];saveContacts();renderContacts();updateInfo();showToast('已清除所有資料');
+}
+
+// ══ CONTACTS LIST ════════════════════════════════════════════
+function renderContacts(){
+  const el=document.getElementById('contacts-list');
+  const badge=document.getElementById('contact-count-badge');
+  badge.textContent=contacts.length;
+  if(!contacts.length){
+    el.innerHTML=`<div class="empty-state">
+      <div class="empty-icon">📭</div>
+      <div class="empty-title">尚無聯絡人</div>
+      <div class="empty-sub">請先掃描名片來新增聯絡人</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML=[...contacts].reverse().map((c,ri)=>{
+    const i=contacts.length-1-ri;
+    const col=avatarColor(c.name);
+    return`<div class="contact-item" onclick="showDetail(${i})">
+      <div class="avatar" style="background:${col}22;color:${col}">${initials(c.name)}</div>
+      <div class="ci-info">
+        <div class="ci-name">${esc(c.name||'未知姓名')}</div>
+        <div class="ci-sub">${esc(c.company||c.title||'—')}</div>
+      </div>
+      <div class="ci-date">${timeAgo(c.created_at)}</div>
+      <div class="chevron">›</div>
+    </div>`;
+  }).join('');
+}
+
+// ══ DETAIL VIEW ══════════════════════════════════════════════
+function showDetail(idx){
+  const c=contacts[idx]; if(!c)return;
+  const col=avatarColor(c.name);
+  const df=(label,val,html='',full=false)=>{
+    if(!val)return'';
+    return`<div class="df${full?' df-full':''}">
+      <div class="df-label">${label}</div>
+      <div class="df-value">${html||esc(val)}</div>
+    </div>`;
+  };
+  document.getElementById('detail-content').innerHTML=`
+    <div class="detail-hero">
+      <div class="detail-avatar" style="background:${col}22;color:${col}">${initials(c.name)}</div>
+      <div>
+        <div class="detail-name">${esc(c.name||'—')}</div>
+        <div class="detail-meta">${esc(c.title||'')}${c.title&&c.company?' · ':''}${esc(c.company||'')}</div>
+      </div>
+    </div>
+    ${c.image?`<img class="detail-img" src="${c.image}" alt="名片">` :''}
+    <div class="detail-grid">
+      ${df('📞 電話',c.phone,c.phone?`<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`:'')}
+      ${df('📱 手機',c.mobile,c.mobile?`<a href="tel:${esc(c.mobile)}">${esc(c.mobile)}</a>`:'')}
+      ${df('✉ Email',c.email,c.email?`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:'')}
+      ${df('🌐 網站',c.website,c.website?`<a href="${c.website.startsWith('http')?c.website:'https://'+c.website}" target="_blank">${esc(c.website)}</a>`:'')}
+      ${df('📍 地址',c.address,'',true)}
+      ${df('📝 備註',c.note,'',true)}
+      ${df('🕐 新增時間',c.created_at?new Date(c.created_at).toLocaleString('zh-TW'):'')}
+    </div>
+    <button class="btn btn-danger" style="width:100%;justify-content:center;margin-top:8px" onclick="deleteContact(${idx})">刪除此聯絡人</button>
+  `;
+  switchTab('detail');
+}
+
+function deleteContact(idx){
+  if(!confirm('確定刪除？'))return;
+  contacts.splice(idx,1);saveContacts();
+  showToast('已刪除');
+  switchTab('contacts');
+}
+
+// ══ CHAT ═════════════════════════════════════════════════════
+function sendChip(text){ document.getElementById('chat-input').value=text; sendMsg(); }
+
+async function sendMsg(){
+  const inp=document.getElementById('chat-input');
+  const text=inp.value.trim(); if(!text)return;
+  inp.value=''; inp.style.height='auto';
+  appendMsg('user',text);
+  chatHistory.push({role:'user',content:text});
+  const typEl=appendMsg('ai','▋',true);
+  const now=Date.now(), oneMonth=30*24*3600*1000;
+  const cJson=JSON.stringify(contacts.map(c=>({
+    name:c.name,title:c.title,company:c.company,
+    phone:c.phone,mobile:c.mobile,email:c.email,
+    address:c.address,website:c.website,note:c.note,
+    created_at:new Date(c.created_at).toISOString(),
+    is_recent:(now-c.created_at)<oneMonth
+  })));
+  try{
+    const ans=await callGemini(chatHistory.slice(-10),
+      `你是名片管理 AI 助理。現在時間：${new Date().toLocaleString('zh-TW')}\n聯絡人資料：${cJson}\n規則：用繁體中文回答；「最近一個月」= is_recent:true；資料庫空時提示先掃描名片；回答簡潔。`
+    );
+    chatHistory.push({role:'assistant',content:ans});
+    typEl.innerHTML=fmtMsg(ans);
+  }catch(e){
+    typEl.innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;
+  }
+  document.getElementById('chat-msgs').scrollTop=99999;
+}
+
+function appendMsg(role,content,isTemp=false){
+  const msgs=document.getElementById('chat-msgs');
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  div.innerHTML=`<div class="mavatar ${role}">${role==='ai'?'AI':'你'}</div>
+    <div class="mbubble">${isTemp?content:fmtMsg(content)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop=99999;
+  return div.querySelector('.mbubble');
+}
+
+function fmtMsg(text){
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\|(.+)\|/g,m=>{
+      const cells=m.split('|').filter(c=>c.trim());
+      if(cells.every(c=>c.trim().match(/^[-: ]+$/)))return'';
+      return'<tr>'+cells.map(c=>`<td>${c.trim()}</td>`).join('')+'</tr>';
+    })
+    .replace(/(<tr>.*<\/tr>\n?)+/g,m=>`<table><tbody>${m}</tbody></table>`)
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    .replace(/^[-•] (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g,m=>`<ul style="padding-left:16px;margin:4px 0">${m}</ul>`)
+    .replace(/\n/g,'<br>');
+}
+
+// ══ INIT ═════════════════════════════════════════════════════
+renderContacts();
+renderKeys();
+updateInfo();
+</script>
+</body>
+</html>
